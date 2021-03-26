@@ -1,6 +1,8 @@
 import numpy as np
 from sklearn.metrics import mean_squared_error
 import matplotlib.patches as pat
+from matplotlib import cm
+import os
 
 
 def ellipseToGaussian(x_center,y_center,r_xi,r_eta,alpha_rad):
@@ -151,21 +153,23 @@ def generer_catalogue(N, means, covMats, bruit=0.2, center=None, alpha=None, mod
     return catalogue
 
 
-def plot_tourbillon(tourbillon):
+def plot_tourbillon(tourbillon, size=6):
     # returns a matplotlib patch
     # tourbillon de taille 5
     mean = tourbillon[:2]
     C = np.array([[tourbillon[2], tourbillon[3]],[tourbillon[3],tourbillon[4]]])
     u, s, vh = np.linalg.svd(C)
     theta = np.sign(C[1,0]) * np.arccos(np.trace(C)/2)
-    a = pat.Ellipse(xy=mean, width=6*s[0]**0.5, height=6*s[1]**0.5, angle=theta*180/np.pi, alpha=0.2)
+    a = pat.Ellipse(xy=mean, width=size*s[0]**0.5, height=size*s[1]**0.5, angle=theta*180/np.pi)
     return a
 
-def plot_trajectory(traj_tourbillon, ax, color="red"):
+def plot_trajectory(traj_tourbillon, ax, colors=None, size=6):
     """traj_tourbillon of shape Nx5, ax is a matplotlib axe"""
-    for tourbillon in traj_tourbillon:
-        patch = plot_tourbillon(tourbillon)
-        patch.set_facecolor(color)
+    if colors is None:
+        colors = cm.get_cmap("autumn")(np.linspace(0, 1, len(traj_tourbillon)))
+    for i, tourbillon in enumerate(traj_tourbillon):
+        patch = plot_tourbillon(tourbillon, size=size)
+        patch.set_facecolor(colors[i])
         ax.add_artist(patch)
     return ax
 
@@ -308,7 +312,7 @@ def AnDA_Wasserstein(a,b):
     res = res.reshape((x,y))
     return res
 
-def load_playground(filename = "data\playground_file.npz"):
+def load_playground(filename=os.path.join("data", "playground_file.npz")):
     npzfile = np.load(filename)
     list_mean_gauss = npzfile['list_mean_gauss']
     list_covMat_gauss = npzfile['list_covMat_gauss']
