@@ -19,12 +19,16 @@ class GaussianDistance:
     
     def __call__(self, x, y):
         """Compute the distance between x and y
-        x and y of shapes (...,5), must be broadcastable
+        x and y of shapes (...,p), x and y must be broadcastable
+        p % 5 == 0
         return an array of shape (...) depending on the broadcast
         """
-        mu1, covMat1 = gaussian_repr(x)
-        m2, covMat2 = gaussian_repr(y)
-        return self.distance(mu1, mu2, covMat1, covMat2)
+        q = x.shape[-1] // 5
+        new_x_shape = list(x.shape)[:-1] + [q,5]
+        new_y_shape = list(y.shape)[:-1] + [q,5]
+        mu1, covMat1 = utils.gaussian_repr(x.reshape(tuple(new_x_shape)))
+        mu2, covMat2 = utils.gaussian_repr(y.reshape(tuple(new_y_shape)))
+        return self.distance(mu1, mu2, covMat1, covMat2).sum(axis=-1)
 
 
 def wasserstein_metric(mu1,mu2,covMat1,covMat2):
