@@ -5,48 +5,70 @@ from matplotlib import cm
 import os
 
 
-def ellipseToGaussian(x_center,y_center,r_xi,r_eta,alpha_rad):
-    mux= x_center
-    muy = y_center 
-    sigma_xi = (1/6)*r_xi
-    sigma_eta = (1/6)*r_eta
-    
-    cov = 0.5*np.tan(2*alpha_rad)*((sigma_xi**2) - (sigma_eta**2))
-    CovMat = np.array([[sigma_eta**2, 0],[0, sigma_xi**2]])
-    
-    P = np.array([[np.cos(alpha_rad+(np.pi/2)), np.sin(alpha_rad+(np.pi/2))],[-np.sin(alpha_rad+(np.pi/2)), np.cos(alpha_rad+(np.pi/2))]])
-    P_1 = np.linalg.inv(P)
-    CovMatBis = np.linalg.multi_dot([P_1, CovMat, P])
-    mu = np.array([mux,muy])
-    
-    return mu, CovMatBis
+def det_22(M):
+    """M is a stack of positive definite matrices of size 2x2 (...,2,2)
+    returns their determinant"""
+    delta = M[...,0,0]*M[...,1,1] - M[...,1,0]*M[...,0,1]
+    return delta
 
-def sqrtm_maison(M):
-    """M is a stack of positive definite matrices of size 2x2 (...,2,2)"""
+def sqrtm_22(M):
+    """M is a stack of positive definite matrices of size 2x2 (...,2,2)
+    returns square root"""
     tau = np.trace(M, axis1=-2, axis2=-1)
-    delta = M[...,0,0]*M[...,1,1] - M[...,1,0]*M[...,0,1] # determinant
+    delta = det_22(M)
     s = np.sqrt(delta)
     t = np.sqrt(tau + 2*s)
-    return (M + (s*np.eye(2)[...,np.newaxis]).T) / t[...,np.newaxis,np.newaxis]
+    return ((M + s[...,np.newaxis,np.newaxis]*np.eye(2)).T / t).T
+
+def inv_22(M):
+    """M is a stack of positive definite matrices of size 2x2 (...,2,2)
+    returns their inverse"""
+    invM = np.empty(M.shape)
+    delta = det_22(M)
+    invM[...,0,0], invM[...,1,1] = M[...,1,1], M[...,0,0]
+    invM[...,1,0] = -M[...,1,0]
+    invM[...,0,1] = -M[...,0,1]
+    invM = invM.T / delta
+    return invM.T
+
+def broadcasted_prod(M,x):
+    """
+    M of shape (...,p,p)
+    x of shape (...,p,1)
+    M and x must be broadcastable
+    compute a matrix-vector product in a broadcast way between M and x"""
+    return np.einsum('...ik,...kj->...ij', M, x)
 
 def wasserstein_metric(mu1,mu2,covMat1,covMat2):
-    """mus of shape Nx2, covMats of shape Nx2x2
-    returns the wasserstein distance of each pair of gaussian, array of shape N"""
-    rC2 = sqrtm_maison(covMat2)
-    mat = covMat1 + covMat2 - (2*sqrtm_maison(rC2 @ covMat1 @ rC2))
-    wasserstein = np.linalg.norm(mu1-mu2, axis=1)**2 + np.trace(mat, axis1=1, axis2=2)
+    """mus of shape (...,2), covMats of shape (...,2,2)
+    The shapes of the first and second set of gaussians must be broadcastable
+    returns the wasserstein distance squared"""
+    rC2 = sqrtm_22(covMat2)
+    mat = covMat1 + covMat2 - (2*sqrtm_22(rC2 @ covMat1 @ rC2))
+    wasserstein = np.linalg.norm(mu1-mu2, axis=-1)**2 + np.trace(mat, axis1=-2, axis2=-1)
     return wasserstein
 
 def hellinger_metric(mu1,mu2,covMat1,covMat2):
-    coef = (np.linalg.det(covMat1)**(1/4))*(np.linalg.det(covMat2)**(1/4))/(np.linalg.det(0.5*(covMat1+covMat2)))
-    exp_ = np.linalg.multi_dot([np.transpose(mu1-mu2),0.5*(covMat1+covMat2),mu1-mu2])
+    """mus of shape (...,2), covMats of shape (...,2,2)
+    The shapes of the first and second set of gaussians must be broadcastable
+    returns the hellinger distance squared"""
+    coef = (det_22(covMat1)**(1/4))*(det_22(covMat2)**(1/4))/(det_22(0.5*(covMat1+covMat2)))
+    mu1 = mu1[...,:,np.newaxis]
+    mu2 = mu2[...,:,np.newaxis]
+    exp_ = broadcasted_prod(broadcasted_prod(np.swapaxes(mu1-mu2,-1,-2), inv_22(0.5*(covMat1+covMat2))), mu1-mu2)[...,0,0]
     hellinger = 1-(coef*np.exp((-1/8)*exp_))
     return hellinger
 
 def KL_div(mu1,mu2,covMat1,covMat2):
-    prod = np.linalg.multi_dot([np.transpose(mu2-mu1),np.linalg.inv(covMat2),mu2-mu1])
-    tr = np.trace(np.dot(np.linalg.inv(covMat2),covMat1))
-    kl = 0.5*(tr + prod - 2 + np.log(np.linalg.det(covMat2)/np.linalg.det(covMat1)))
+    """mus of shape (...,2), covMats of shape (...,2,2)
+    The shapes of the first and second set of gaussians must be broadcastable
+    returns the KL divergence squared"""
+    invCovmat2 = inv_22(covMat2)
+    mu1 = mu1[...,:,np.newaxis]
+    mu2 = mu2[...,:,np.newaxis]
+    prod = broadcasted_prod(broadcasted_prod(np.swapaxes(mu1-mu2,-1,-2), invCovmat2), mu1-mu2)[...,0,0]
+    tr = np.trace(invCovmat2 @ covMat1, axis1=-2, axis2=-1)
+    kl = 0.5*(tr + prod - 2 + np.log(det_22(covMat2)/det_22(covMat1)))
     return kl
 
 
