@@ -1,34 +1,57 @@
-def predictions(catalogue, observations, method, k=100):
-    """predict the next state of a list of tourbillons
-    observations of shape Mx10, returns array of shape Mx10"""
-    tourbillons_suivant=[]
-    predecesseurs = catalogue[:,0,:]
-    N = predecesseurs.shape[0]
-    for tourbillon in observations:
-        distances = new_wasserstein(np.stack([tourbillon]*N, axis=0), predecesseurs)
-        indices_wt = np.argpartition(distances, k)[:k] # indices of the k nearest neighbors
-        neighbors = catalogue[indices_wt,0,:]
-        successors = catalogue[indices_wt,1,:]
-        distances_neighbors = distances[indices_wt]
-        weights = compute_weights(distances_neighbors, l=np.median(distances_neighbors))
-        pred = method(tourbillon, neighbors, successors, weights)
-        tourbillons_suivant.append(pred)
-    return np.array(tourbillons_suivant)
+from distance import wasserstein
+from forecasting_operators import compute_weights
+import numpy as np
+
+
+def forecast_step(catalogue, observations, operator, k, distance):
+    """forecasting the next state of several observations
+    Parameters:
+        catalogue: (N,2,p) array, p%5==0 #TODO make the catalogue and the observations broadcastable
+        observations: (...,p) array
+        operator: an operator from operator.py
+        k: number of analogs
+        distance: distance.GaussianDistance object
+    Returns:
+        predictions: (...,p) array"""
+    
+    # Flatten observations
+    observations_flat = observations.reshape(-1,observations.shape[-1]) # shape (M,p)
+    predecessors = catalogue[:,0,:] # shape (N,p)
+    M = observations_flat.shape[0]
+    N = predecessors.shape[0]
+
+    # Compute distances and find k nearest analogs and their successors
+    distances = distance(observations_flat[:,np.newaxis,:], predecessors) # shape (M,N)
+    indices_wt = np.argpartition(distances, k, axis=-1)[:,:k] # indices of the k nearest analogs, shape (M,k)
+    analogs = predecessors[indices_wt] # shape (M,k,p)
+    successors = catalogue[indices_wt,0] # successors of the analogs, shape (M,k,p)
+    distance_analogs = np.array([distances[i, indices_wt[i]] for i in range(distances.shape[0])]) # shape (M,k)
+
+    # Compute weights and apply the operator
+    weights = compute_weights(distance_analogs, np.median(distance_analogs, axis=1))
+    predictions = operator(observations_flat, analogs, successors, weights)
+
+    # reshape the predictions
+    predictions = predictions.reshape(observations.shape)
+
+    return predictions
 
 
 
-def list_prediction(catalogue,nb_predictions, observations, method, k=50):
-    """construit une matrice de taille nombre d'ellipses x nb_predictions x 10
-    cette matrice représente les valeurs prédites"""
-    mat_prediction = np.empty((observations.shape[0],nb_predictions,observations.shape[1]))
+def forecast(catalogue, observations, operator, P, k=50, distance=wasserstein):
+    """forecasting the next P states
+    Parameters:
+        catalogue: (N,2,p) array, p%5==0
+        observations: (...,p) array
+        operator: an operator from operator.py
+        P: number of predictions to do, int
+        k: number of analogs to consider
+        distance: distance.GaussianDistance object
+    Returns:
+        predictions: (observations.shape, P) array"""
+    predictions = np.empty(observations.shape+tuple([P]))
     next_obs = observations
-    for j in range(nb_predictions):
-        next_obs = predictions(catalogue,next_obs, method, k=k)
-        mat_prediction[:,j] = next_obs
-    return mat_prediction
-
-
-def load_data(filename ='data\catalogue.txt'):
-    data = np.loadtxt(filename)
-    data = data.reshape((int(data.shape[0]/2),2,10))
-    return data
+    for j in range(P):
+        next_obs = forecast_step(catalogue, next_obs, operator, k, distance)
+        predictions[...,j] = next_obs
+    return predictions
