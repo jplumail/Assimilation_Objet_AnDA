@@ -60,7 +60,7 @@ def locally_linear_mean(x, neighbors, successors, weights):
         X_centered
     ) # shape (...,p,p)
     cov_X_inv = np.linalg.pinv(cov_X) # shape (...,p,p)
-    cov_YX = = broadcasted_prod(
+    cov_YX = broadcasted_prod(
         broadcasted_prod(np.swapaxes(Y_centered, -1, -2), W),
         X_centered
     ) # shape (...,p,p)
