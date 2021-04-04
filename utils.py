@@ -18,7 +18,7 @@ def sqrtm_22(M):
     delta = det_22(M)
     s = np.sqrt(delta)
     t = np.sqrt(tau + 2*s)
-    return ((M + s[...,np.newaxis,np.newaxis]*np.eye(2)).T / t).T
+    return ((M + s[...,np.newaxis,np.newaxis]*np.eye(2)).T / t.T).T
 
 def inv_22(M):
     """M is a stack of positive definite matrices of size 2x2 (...,2,2)
@@ -28,7 +28,7 @@ def inv_22(M):
     invM[...,0,0], invM[...,1,1] = M[...,1,1], M[...,0,0]
     invM[...,1,0] = -M[...,1,0]
     invM[...,0,1] = -M[...,0,1]
-    invM = invM.T / delta
+    invM = invM.T / delta.T
     return invM.T
 
 def broadcasted_prod(M,x):
