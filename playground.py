@@ -171,3 +171,13 @@ def playground():
     pos = np.stack([x,y], axis=-1)
     Z = sum_gaus2d(pos,list_mean,list_covMat, dirs)
     return list_mean, list_covMat, X, Y, Z
+
+def list_true_value(catalogue, means, covMats, nb_predictions,observations,bruit=0.2,center=None,alpha=None,model="follow gradient"):
+    """construit une matrice de taille nombre d'ellipses x nb_predictions x 5
+    cette matrice représente les valeurs réelles si les tourbillons suivent le modèle prédéfini"""
+    mat_true = np.empty((observations.shape[0],nb_predictions,5))
+    next_gaussians = observations[:,5:]
+    for j in range(nb_predictions):
+        next_gaussians = step(next_gaussians, means, covMats, bruit=bruit, center=center, alpha=alpha, model=model)
+        mat_true[:,j] = next_gaussians
+    return mat_true
