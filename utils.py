@@ -1,7 +1,4 @@
 import numpy as np
-from sklearn.metrics import mean_squared_error
-import matplotlib.patches as pat
-from matplotlib import cm
 import os
 
 
@@ -30,14 +27,6 @@ def inv_22(M):
     invM[...,0,1] = -M[...,0,1]
     invM = invM.T / delta.T
     return invM.T
-
-def broadcasted_prod(A, B):
-    """
-    A array of shape (...,p,q)
-    B array of shape (...,q,r)
-    A and B must be broadcastable
-    compute a matrix product in a broadcast way between A and B"""
-    return np.einsum('...ik,...kj->...ij', A, B)
 
 def gaussian_repr(x):
     """Transform a vector x of shape (...,5) into its gaussian representation

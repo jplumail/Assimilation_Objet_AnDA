@@ -47,10 +47,7 @@ def hellinger_metric(mu1,mu2,covMat1,covMat2):
     coef = (utils.det_22(covMat1)*utils.det_22(covMat2))**(1/4) / utils.det_22(0.5*(covMat1+covMat2))
     mu1 = mu1[...,:,np.newaxis]
     mu2 = mu2[...,:,np.newaxis]
-    exp_ = utils.broadcasted_prod(
-        utils.broadcasted_prod(np.swapaxes(mu1-mu2,-1,-2), utils.inv_22(0.5*(covMat1+covMat2))),
-        mu1-mu2
-    )[...,0,0]
+    exp_ = (np.swapaxes(mu1-mu2,-1,-2) @ 0.5*(covMat1+covMat2) @ (mu1-mu2))[...,0,0]
     hellinger = 1-(coef*np.exp((-1/8)*exp_))
     return hellinger
 
@@ -61,12 +58,9 @@ def KL_div(mu1,mu2,covMat1,covMat2):
     invCovmat2 = utils.inv_22(covMat2)
     mu1 = mu1[...,:,np.newaxis]
     mu2 = mu2[...,:,np.newaxis]
-    prod = utils.broadcasted_prod(
-        utils.broadcasted_prod(np.swapaxes(mu1-mu2,-1,-2), invCovmat2),
-        mu1-mu2
-    )[...,0,0]
+    prod = (np.swapaxes(mu1-mu2,-1,-2) @ invCovmat2 @ (mu1-mu2))[...,0,0]
     tr = np.trace(invCovmat2 @ covMat1, axis1=-2, axis2=-1)
-    kl = 0.5*(tr + prod - 2 + np.log(det_22(covMat2)/det_22(covMat1)))
+    kl = 0.5*(tr + prod - 2 + np.log(utils.det_22(covMat2)/utils.det_22(covMat1)))
     return kl
 
 
