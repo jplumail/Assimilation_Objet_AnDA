@@ -62,30 +62,37 @@ def locally_linear_mean(x, neighbors, successors, weights):
     return
 
 
-def forecast_step(catalogue, observations, operator, k, distance):
+def forecast_step(catalogues, observations, operator, k, distance):
     """forecasting the next state of several observations
     Parameters:
-        catalogue: (N,2,p) array, p%5==0 #TODO make the catalogue and the observations broadcastable
+        catalogues: (...,N,2,p) array, p%5==0
+            If catalogues.ndim > 3, catalogues is a stack of catalogues.
+            In this case, (...) must be broadcastable with observations (...). It becomes the shape of the output.
         observations: (...,p) array
-        operator: an operator from operator.py
-        k: number of analogs
-        distance: distance.GaussianDistance object
+        operator: an operator taken from forecasting.py
+        k: number of analogs, int
+            k < N
+        distance: a distance.GaussianDistance object
     Returns:
         predictions: (...,p) array"""
     
-    predecessors = catalogue[:,0,:] # shape (N,p)
-    N = predecessors.shape[0]
+    predecessors = catalogues[...,:,0,:] # shape (...,N,p)
+    # Compute distances
+    distances = distance(observations[...,np.newaxis,:], predecessors) # shape (...,N), broadcast between observations and predecessors
+    broadcasted_shape = distances.shape[:-1]
 
-    # Compute distances and find k nearest analogs and their successors
-    distances = distance(observations[...,np.newaxis,:], predecessors) # shape (...,N)
-    indices = np.argpartition(distances, k, axis=-1)[...,:k] # indices of the k nearest analogs, shape (...,k)
-    analogs = predecessors[indices] # shape (...,k,p)
-    successors = catalogue[indices,0] # successors of the analogs, shape (...,k,p)
+    # find k nearest analogs and their successors
+    indices_analogs = np.argpartition(distances, k, axis=-1)[...,:k] # indices of the k nearest analogs, shape (...,k)
+    ind = [[True]*(catalogues.shape[i]) for i in range(catalogues.ndim-2)]
+    ind = list(np.ix_(*ind))
+    ind[-1] = indices_analogs
+    analogs = catalogues[tuple(ind+[0])] # shape (...,k,p)
+    successors = catalogues[tuple(ind+[1])] # successors of the analogs, shape (...,k,p)
 
     # Distances of analogs
-    ind = [np.arange(distances.shape[i]) for i in range(observations.ndim)]
+    ind = [[True]*(distances.shape[i]) for i in range(distances.ndim)]
     ind = list(np.ix_(*ind))
-    ind[-1] = indices
+    ind[-1] = indices_analogs
     distance_analogs = distances[tuple(ind)] # shape (...,k)
 
     # Compute weights and apply the operator
@@ -96,10 +103,12 @@ def forecast_step(catalogue, observations, operator, k, distance):
 
 
 
-def forecast(catalogue, observations, operator, T, k=50, distance=wasserstein):
+def forecast(catalogues, observations, operator, T, k=50, distance=wasserstein):
     """forecasting the next P states
     Parameters:
-        catalogue: (N,2,p) array, p%5==0
+        catalogues: (...,N,2,p) array, p%5==0
+            If catalogues.ndim > 3, catalogues is a stack of catalogues.
+            In this case, (...) must be broadcastable with observations (...). It becomes the shape of the output.
         observations: (...,p) array
         operator: an operator from operator.py
         T: number of predictions to do, int
@@ -107,7 +116,9 @@ def forecast(catalogue, observations, operator, T, k=50, distance=wasserstein):
         distance: distance.GaussianDistance object
     Returns:
         predictions: (..., p, T) array"""
-    predictions = np.empty(observations.shape+tuple([P]))
+    final_shape = np.broadcast_shapes(catalogues.shape[:-3], observations.shape[:-1])
+    p = observations.shape[-1]
+    predictions = np.empty(final_shape+tuple([p, T]))
     next_obs = observations
     for j in range(T):
         next_obs = forecast_step(catalogue, next_obs, operator, k, distance)
