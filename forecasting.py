@@ -121,6 +121,6 @@ def forecast(catalogues, observations, operator, T, k=50, distance=wasserstein):
     predictions = np.empty(final_shape+tuple([p, T]))
     next_obs = observations
     for j in range(T):
-        next_obs = forecast_step(catalogue, next_obs, operator, k, distance)
+        next_obs = forecast_step(catalogues, next_obs, operator, k, distance)
         predictions[...,j] = next_obs
     return predictions
