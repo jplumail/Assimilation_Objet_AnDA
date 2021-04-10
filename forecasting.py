@@ -58,8 +58,8 @@ def locally_linear_mean(x, neighbors, successors, weights):
     cov_X = np.swapaxes(X_centered, -1, -2) @ W @ X_centered # shape (...,p,p)
     cov_X_inv = np.linalg.pinv(cov_X) # shape (...,p,p)
     cov_YX = np.swapaxes(Y_centered, -1, -2) @ W @ X_centered # shape (...,p,p)
-    y = cov_YX @ cov_X_inv @ (x - X_mean)
-    return
+    y = (cov_YX @ cov_X_inv) @ (x - X_mean)[...,np.newaxis]
+    return y[...,0]
 
 
 def forecast_step(catalogues, observations, operator, k, distance):
